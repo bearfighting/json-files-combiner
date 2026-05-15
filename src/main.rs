@@ -1,27 +1,28 @@
-use std::fs;
+use std::path::Path;
 
-use serde_json::{Map, Value};
+use anyhow::Result;
+use clap::Parser;
+use tokio::fs;
 
-fn main()-> Result<(), Box<dyn std::error::Error>> {
-    let file1 = fs::read_to_string("./testcases/test-1.json")?;
-    let file2 = fs::read_to_string("./testcases/test-2.json")?;
+use json_files_combiner::cli::Args;
+use json_files_combiner::combiner::combiner;
 
-    let value1 = serde_json::from_str(&file1)?;
-    let value2 = serde_json::from_str(&file2)?;
+#[tokio::main]
+async fn main() -> Result<()> {
+    let commands = Args::parse();
 
-    let mut map = Map::new();
+    if let Some(paths) = commands.paths {
+        let paths: Vec<&Path> = paths.iter().map(|path| Path::new(path)).collect();
 
-    if let Value::Object(value) = value1 {
-        map.extend(value);
+        let result = combiner(&paths).await?;
+
+        match commands.destination {
+            Some(destination) => {
+                fs::write(&destination, serde_json::to_string_pretty(&result)?).await?
+            }
+            None => fs::write(".", serde_json::to_string_pretty(&result)?).await?,
+        }
     }
-
-    if let Value::Object(value) = value2 {
-        map.extend(value);
-    }
-
-    let result = Value::Object(map);
-
-    println!("{}", serde_json::to_string_pretty(&result)?);
 
     Ok(())
 }
